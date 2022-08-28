@@ -1,49 +1,51 @@
 import { Executor } from '../modules/executor';
 
 describe('Executor', () => {
-  it('should be defined', () => {
-    const executor = new Executor([], {});
+  describe('default execution', () => {
+    it('should be defined', () => {
+      const executor = new Executor([]);
 
-    expect(executor).toBeDefined();
-  });
+      expect(executor).toBeDefined();
+    });
 
-  it('should have a function called executeAsync', () => {
-    const executor = new Executor([], {});
+    it('should have a function called executeAsync', () => {
+      const executor = new Executor([]);
 
-    expect(executor.execute).toBeDefined();
-  });
+      expect(executor.execute).toBeDefined();
+    });
 
-  it('should call both functions', async () => {
-    const mockFN1 = jest.fn(() => Promise.resolve('test 1'));
-    const mockFN2 = jest.fn((args?: any) => Promise.resolve(args));
+    it('should call both functions', async () => {
+      const mockFN1 = jest.fn(() => Promise.resolve('test 1'));
+      const mockFN2 = jest.fn((args?: any) => Promise.resolve(args));
 
-    const executor = new Executor([
-      {
-        args: {},
-        method: mockFN1,
-        name: 'test1',
-        options: {}
-      },
-      {
-        args: { arg1: 'test1' },
-        method: mockFN2,
-        name: 'test2',
-        options: {}
-      }
-    ]);
-
-    const results = await executor.execute();
-    expect(results).toMatchObject({
-      test1: {
-        status: 'fulfilled',
-        value: 'test 1'
-      },
-      test2: {
-        status: 'fulfilled',
-        value: {
-          arg1: 'test1'
+      const executor = new Executor([
+        {
+          args: {},
+          method: mockFN1,
+          name: 'test1',
+          options: {}
+        },
+        {
+          args: { arg1: 'test1' },
+          method: mockFN2,
+          name: 'test2',
+          options: {}
         }
-      }
+      ]);
+
+      const results = await executor.execute();
+      expect(results).toMatchObject({
+        test1: {
+          status: 'fulfilled',
+          value: 'test 1'
+        },
+        test2: {
+          status: 'fulfilled',
+          value: {
+            arg1: 'test1'
+          }
+        }
+      });
     });
   });
 
@@ -59,7 +61,7 @@ describe('Executor', () => {
 
       const executor = new Executor([
         {
-          args: {},
+          args: [],
           method: [mockFN1, mockFN2],
           name: 'test1',
           options: {
@@ -125,7 +127,7 @@ describe('Executor', () => {
 
       const executor = new Executor([
         {
-          args: {},
+          args: [],
           method: [mockFN1],
           name: 'test1',
           options: {
@@ -164,6 +166,41 @@ describe('Executor', () => {
           reason: Error(
             'test1: is an array but not flagged as a race condition'
           )
+        }
+      });
+    });
+  });
+  describe('race conditions multiple arg sets', () => {
+    it('should error, when too many args are provided', async () => {
+      const mockFN1 = jest.fn((args) => Promise.resolve(args));
+
+      const mockFN2 = jest.fn(() => Promise.resolve('test 2'));
+
+      const executor = new Executor([
+        {
+          args: [
+            {
+              arg1: 'test1'
+            }
+          ],
+          method: [mockFN1, mockFN2],
+          name: 'test1',
+          options: {
+            isRace: true
+          }
+        }
+      ]);
+
+      const results = await executor.execute();
+
+      console.log(results);
+
+      expect(results).toMatchObject({
+        test1: {
+          status: 'fulfilled',
+          value: {
+            arg1: 'test1'
+          }
         }
       });
     });

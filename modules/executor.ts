@@ -24,31 +24,13 @@ interface ExecutionReturn<T> {
   };
 }
 
-interface ExecuteOptions {
-  /**
-   * how to handle the method execution
-   */
-  callAsync?: boolean;
-}
-
 export class Executor {
   // create a constructor initiate the class with the parameters
-  constructor(
-    readonly methods: MethodStruct[],
-    readonly options?: ExecuteOptions
-  ) {
+  constructor(readonly methods: MethodStruct[]) {
     /**
      * a object that contains the methods to be executed
      */
     this.methods = methods;
-
-    /**
-     * a object that contains the options to be used
-     */
-    this.options = {
-      callAsync: false,
-      ...options
-    };
   }
 
   /**
@@ -58,7 +40,8 @@ export class Executor {
     results: { status: 'fulfilled' | 'rejected'; reason?: any; value?: any }[]
   ): ExecutionReturn<any> {
     return results.reduce((acc, result, index) => {
-      acc[this.methods[index].name] = result;
+      const { name } = this.methods[index];
+      acc[name] = result;
       return acc;
     }, {});
   }
@@ -68,12 +51,13 @@ export class Executor {
     // handles the logic for verifying race conditions
     const { args, method, name, options } = methodConfig;
     const isMethodArray = Array.isArray(method);
-    const isArgArray = Array.isArray(args);
+    const isArgsArray = Array.isArray(args);
 
     if (!isMethodArray)
       throw new Error(
         `${name}: methods must be in an array when in race condition`
       );
+    if (!isArgsArray) throw new Error('args must be an array');
 
     if (isMethodArray && method.length < 1)
       throw new Error(`${name}: cannot be an empty array`);
@@ -114,6 +98,8 @@ export class Executor {
     const results = await this.handleMethods();
 
     const reMatched = this.remapResults(results);
+
+    console.log(reMatched);
 
     return reMatched;
   }

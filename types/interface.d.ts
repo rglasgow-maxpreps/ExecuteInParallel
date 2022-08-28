@@ -1,6 +1,7 @@
 export interface MethodStruct {
   /**
-   * The method object arguments
+   * The method arguments. When an array the expected order matches the method order
+   * @type{ {} or any[] }
    */
   args: {} | any[];
   /**
