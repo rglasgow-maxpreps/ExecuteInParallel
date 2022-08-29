@@ -103,8 +103,6 @@ export class Executor {
 
     const reMatched = this.remapResults(results);
 
-    console.log(reMatched);
-
     return reMatched;
   }
 }

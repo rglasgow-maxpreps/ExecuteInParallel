@@ -7,13 +7,11 @@ describe('Executor', () => {
 
       expect(executor).toBeDefined();
     });
-
-    it('should have a function called executeAsync', () => {
+    it('should have a function called execute', () => {
       const executor = new Executor([]);
 
       expect(executor.execute).toBeDefined();
     });
-
     it('should call both functions', async () => {
       const mockFN1 = jest.fn(() => Promise.resolve('test 1'));
       const mockFN2 = jest.fn((args?: any) => Promise.resolve(args));
@@ -47,7 +45,7 @@ describe('Executor', () => {
         }
       });
     });
-    it('should call both functions as arg array', async () => {
+    it('should call all the functions provided', async () => {
       const mockFN1 = jest.fn((arg) => Promise.resolve(arg));
       const mockFN2 = jest.fn((args?: any) => Promise.resolve(args));
 
@@ -86,7 +84,7 @@ describe('Executor', () => {
     it('should call methods as a race condition', async () => {
       const mockFN1 = jest.fn(() => Promise.resolve('test 1'));
       const mockFN2 = jest.fn(
-        (args?: any) =>
+        () =>
           new Promise((resolve) => {
             setTimeout(() => resolve('test 2'), 1000);
           })
@@ -107,6 +105,66 @@ describe('Executor', () => {
         test1: {
           status: 'fulfilled',
           value: 'test 1'
+        }
+      });
+    });
+    it('should work when arg set is an obj', async () => {
+      const mockFN1 = jest.fn((args) => Promise.resolve(args));
+
+      const mockFN2 = jest.fn(() => Promise.resolve('test 2'));
+
+      const executor = new Executor([
+        {
+          args: [
+            {
+              arg1: 'test1'
+            }
+          ],
+          method: [mockFN1, mockFN2],
+          name: 'test1',
+          options: {
+            isRace: true
+          }
+        }
+      ]);
+
+      const results = await executor.execute();
+
+      expect(results).toMatchObject({
+        test1: {
+          status: 'fulfilled',
+          value: {
+            arg1: 'test1'
+          }
+        }
+      });
+    });
+    it('should work when arg set is a array', async () => {
+      const mockFN1 = jest.fn((args) => Promise.resolve(args));
+
+      const mockFN2 = jest.fn((str) => Promise.resolve(str));
+
+      const executor = new Executor([
+        {
+          args: [
+            ['args test'],
+            {
+              arg1: 'test1'
+            }
+          ],
+          method: [mockFN2, mockFN1],
+          name: 'test1',
+          options: {
+            isRace: true
+          }
+        }
+      ]);
+      const results = await executor.execute();
+
+      expect(results).toMatchObject({
+        test1: {
+          status: 'fulfilled',
+          value: 'args test'
         }
       });
     });
@@ -201,70 +259,6 @@ describe('Executor', () => {
           )
         }
       });
-    });
-  });
-  it('should work when arg set is an object', async () => {
-    const mockFN1 = jest.fn((args) => Promise.resolve(args));
-
-    const mockFN2 = jest.fn(() => Promise.resolve('test 2'));
-
-    const executor = new Executor([
-      {
-        args: [
-          {
-            arg1: 'test1'
-          }
-        ],
-        method: [mockFN1, mockFN2],
-        name: 'test1',
-        options: {
-          isRace: true
-        }
-      }
-    ]);
-
-    const results = await executor.execute();
-
-    console.log(results);
-
-    expect(results).toMatchObject({
-      test1: {
-        status: 'fulfilled',
-        value: {
-          arg1: 'test1'
-        }
-      }
-    });
-  });
-  it('should work when arg set is a array', async () => {
-    const mockFN1 = jest.fn((args) => Promise.resolve(args));
-
-    const mockFN2 = jest.fn((str) => Promise.resolve(str));
-
-    const executor = new Executor([
-      {
-        args: [
-          ['args test'],
-          {
-            arg1: 'test1'
-          }
-        ],
-        method: [mockFN2, mockFN1],
-        name: 'test1',
-        options: {
-          isRace: true
-        }
-      }
-    ]);
-    const results = await executor.execute();
-
-    console.log(results);
-
-    expect(results).toMatchObject({
-      test1: {
-        status: 'fulfilled',
-        value: 'args test'
-      }
     });
   });
 });
