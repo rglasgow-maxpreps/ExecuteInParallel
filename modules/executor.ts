@@ -59,15 +59,18 @@ export class Executor {
       );
     if (!isArgsArray) throw new Error('args must be an array');
 
-    if (isMethodArray && method.length < 1)
-      throw new Error(`${name}: cannot be an empty array`);
-
     if (isMethodArray && method.length < 2)
       throw new Error(
         `${name}: there must be two methods to fulfill race condition`
       );
 
-    return Promise.race(method.map((fn, index) => fn(args?.[index])));
+    return Promise.race(
+      method.map((fn, index) => {
+        const argSet = args?.[index];
+        if (Array.isArray(argSet)) return fn(...argSet);
+        return fn(argSet);
+      })
+    );
   }
 
   /**
@@ -77,15 +80,16 @@ export class Executor {
     return Promise.allSettled(
       this.methods.map(async (methodConfig) => {
         const { name, method, args, options } = methodConfig;
-        const isArray = Array.isArray(method);
-        const isRace = options?.isRace ?? false;
+        const isMethodArray = Array.isArray(method);
 
-        if (isRace) return this.handleRaceCondition(methodConfig);
-        if (isArray)
+        if (options.isRace) return this.handleRaceCondition(methodConfig);
+        if (isMethodArray)
           throw new Error(
             `${name}: is an array but not flagged as a race condition`
           );
 
+        if (Array.isArray(args)) return await method(...args);
+        // assume to be an obj
         return await method(args);
       })
     );
