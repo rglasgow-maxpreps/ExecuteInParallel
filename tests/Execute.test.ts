@@ -261,4 +261,44 @@ describe('Executor', () => {
       });
     });
   });
+
+  describe('error with logs', () => {
+    it('should error with logged values', async () => {
+      const customLoggerFn = jest.fn((message) => {
+        console.log(message);
+      });
+
+      const testFn = jest.fn(() => {
+        return 'test';
+      });
+
+      const executor = new Executor(
+        [
+          {
+            args: [],
+            method: testFn,
+            name: 'test',
+            options: {
+              isRace: true
+            }
+          }
+        ],
+        customLoggerFn
+      );
+
+      const results = await executor.execute();
+      expect(results).toMatchObject({
+        test: {
+          status: 'rejected',
+          reason: Error(
+            'test: methods must be in an array when in race condition'
+          )
+        }
+      });
+
+      expect(customLoggerFn).toHaveBeenCalledWith(
+        'test: methods must be in an array when in race condition'
+      );
+    });
+  });
 });

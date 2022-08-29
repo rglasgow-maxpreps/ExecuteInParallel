@@ -26,11 +26,14 @@ interface ExecutionReturn<T> {
 
 export class Executor {
   // create a constructor initiate the class with the parameters
-  constructor(readonly methods: MethodStruct[]) {
-    /**
-     * a object that contains the methods to be executed
-     */
-    this.methods = methods;
+  constructor(
+    readonly methods: MethodStruct[],
+    readonly customLogger?: (args?: any) => void
+  ) {}
+
+  private errorWithLogs(errorMsg: string) {
+    if (this.customLogger) this.customLogger(errorMsg);
+    throw new Error(errorMsg);
   }
 
   /**
@@ -54,13 +57,13 @@ export class Executor {
     const isArgsArray = Array.isArray(args);
 
     if (!isMethodArray)
-      throw new Error(
+      return this.errorWithLogs(
         `${name}: methods must be in an array when in race condition`
       );
-    if (!isArgsArray) throw new Error('args must be an array');
+    if (!isArgsArray) return this.errorWithLogs('args must be an array');
 
     if (isMethodArray && method.length < 2)
-      throw new Error(
+      return this.errorWithLogs(
         `${name}: there must be two methods to fulfill race condition`
       );
 
@@ -84,7 +87,7 @@ export class Executor {
 
         if (options.isRace) return this.handleRaceCondition(methodConfig);
         if (isMethodArray)
-          throw new Error(
+          return this.errorWithLogs(
             `${name}: is an array but not flagged as a race condition`
           );
 
