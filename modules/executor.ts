@@ -1,111 +1,91 @@
-import { MethodStruct } from '@/types/interface';
+import { MethodStruct, OptionsInterface } from '@/types/interface';
 
-interface ExecutionReturn<T> {
-  /**
-   * The resulting method object name
-   */
-  [key: string]: {
-    /**
-     * The status of the method execution
-     */
-    status: 'fulfilled' | 'rejected';
+type ToOutputType<
+  T extends MethodStruct<string>[],
+  M extends PromiseSettledResult<any>[]
+> = {
+  [K in T[number] as K['name']]: M;
+};
+type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;
 
-    /**
-     * the reason the method execution failed
-     */
-    reason?: any;
+const errorWithLogs = (
+  errorMsg: string,
+  customLogger?: (args?: any) => void
+) => {
+  if (customLogger) customLogger(errorMsg);
+  throw new Error(errorMsg);
+};
 
-    /**
-     * the value of the method execution
-     */
-    value?: {
-      [key: string]: T;
-    };
-  };
-}
+const handleRaceCondition = async <T>(
+  methodConfig: MethodStruct<T>,
+  customLogger: (args?: unknown) => void
+) => {
+  // must me race condition flagged before getting here
+  // handles the logic for verifying race conditions
+  const { args, method, name, options } = methodConfig;
+  const isMethodArray = Array.isArray(method);
+  const isArgsArray = Array.isArray(args);
 
-export class Executor {
-  // create a constructor initiate the class with the parameters
-  constructor(
-    readonly methods: MethodStruct[],
-    readonly customLogger?: (args?: any) => void
-  ) {}
-
-  private errorWithLogs(errorMsg: string) {
-    if (this.customLogger) this.customLogger(errorMsg);
-    throw new Error(errorMsg);
-  }
-
-  /**
-   * remap the method results to a object with the method name as key
-   */
-  private remapResults(
-    results: { status: 'fulfilled' | 'rejected'; reason?: any; value?: any }[]
-  ): ExecutionReturn<any> {
-    return results.reduce((acc, result, index) => {
-      const { name } = this.methods[index];
-      acc[name] = result;
-      return acc;
-    }, {});
-  }
-
-  private async handleRaceCondition(methodConfig: MethodStruct) {
-    // must me race condition flagged before getting here
-    // handles the logic for verifying race conditions
-    const { args, method, name, options } = methodConfig;
-    const isMethodArray = Array.isArray(method);
-    const isArgsArray = Array.isArray(args);
-
-    if (!isMethodArray)
-      return this.errorWithLogs(
-        `${name}: methods must be in an array when in race condition`
-      );
-    if (!isArgsArray) return this.errorWithLogs('args must be an array');
-
-    if (isMethodArray && method.length < 2)
-      return this.errorWithLogs(
-        `${name}: there must be two methods to fulfill race condition`
-      );
-
-    return Promise.race(
-      method.map((fn, index) => {
-        const argSet = args?.[index];
-        if (Array.isArray(argSet)) return fn(...argSet);
-        return fn(argSet);
-      })
+  if (!isMethodArray)
+    return errorWithLogs(
+      `${name}: methods must be in an array when in race condition`,
+      customLogger
     );
-  }
+  if (!isArgsArray) return errorWithLogs(`${name}: args must be an array`);
 
-  /**
-   * handle method validation and execution
-   */
-  private async handleMethods() {
-    return Promise.allSettled(
-      this.methods.map(async (methodConfig) => {
-        const { name, method, args, options } = methodConfig;
-        const isMethodArray = Array.isArray(method);
-
-        if (options.isRace) return this.handleRaceCondition(methodConfig);
-        if (isMethodArray)
-          return this.errorWithLogs(
-            `${name}: is an array but not flagged as a race condition`
-          );
-
-        if (Array.isArray(args)) return await method(...args);
-        // assume to be an obj
-        return await method(args);
-      })
+  if (isMethodArray && method.length < 2)
+    return errorWithLogs(
+      `${name}: there must be at least two methods to fulfill race condition`,
+      customLogger
     );
-  }
 
-  /**
-   * Executes a command
-   */
-  public async execute() {
-    const results = await this.handleMethods();
+  return Promise.race(
+    method.map((fn, index) => {
+      const argSet = args?.[index];
+      if (Array.isArray(argSet)) return fn(...argSet);
+      return fn(argSet);
+    })
+  );
+};
 
-    const reMatched = this.remapResults(results);
+const handleMethods = async <T>(
+  methods: MethodStruct<T>[],
+  customLogger?: (args?: any) => void
+) => {
+  return Promise.allSettled(
+    methods.map(async (methodConfig) => {
+      const { name, method, args, options } = methodConfig;
+      const isMethodArray = Array.isArray(method);
+      const isArgsArray = Array.isArray(args);
 
-    return reMatched;
-  }
-}
+      if (options.isRace)
+        return handleRaceCondition<T>(methodConfig, customLogger);
+      if (isMethodArray)
+        return errorWithLogs(
+          `${name}: is an array but not flagged as a race condition`,
+          customLogger
+        );
+
+      if (isArgsArray) return await method(...args);
+      // assume to be an obj
+      return await method(args);
+    })
+  );
+};
+
+const execute = async <
+  T extends MethodStruct<K>[],
+  M extends PromiseSettledResult<any>[],
+  K extends string
+>(
+  methods: [...T],
+  options?: OptionsInterface
+): Promise<Expand<ToOutputType<T, M>>> => {
+  const results = await handleMethods<K>(methods, options?.customLogger);
+  return methods.reduce((acc, { name }, index) => {
+    acc[name] = results[index];
+    return acc;
+  }, {} as any) as Expand<ToOutputType<T, M>>;
+};
+
+export default execute;

@@ -1,4 +1,4 @@
-export interface MethodStruct {
+export interface MethodStruct<T> {
   /**
    * The method arguments. When an array the expected order matches the method order
    * @type{ {} or any[] }
@@ -11,7 +11,7 @@ export interface MethodStruct {
   /**
    * The return name of the method
    */
-  name: string;
+  name: T extends string ? T : string;
   /**
    * options for the method execution
    */
@@ -22,3 +22,20 @@ export interface MethodStruct {
     isRace?: boolean = false;
   };
 }
+export interface OptionsInterface {
+  /**
+   * how to handle multiple method executions
+   */
+  isRace?: boolean = false;
+  /**
+   * custom logger for the method execution
+   */
+  customLogger?: (args?: any) => void;
+}
+type ToOutputType<
+  T extends MethodStruct<string>[],
+  M extends PromiseSettledResult<any>[]
+> = {
+  [K in T[number] as K['name']]: M;
+};
+type Expand<T> = T extends infer O ? { [K in keyof O]: O[K] } : never;

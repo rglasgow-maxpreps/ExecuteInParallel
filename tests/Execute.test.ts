@@ -1,304 +1,313 @@
-import { Executor } from '../modules/executor';
+import execute from '../modules/executor';
 
-describe('Executor', () => {
-  describe('default execution', () => {
-    it('should be defined', () => {
-      const executor = new Executor([]);
+const testFn1Success = jest.fn(async () => 'test 1');
+const testFn2Reject = jest.fn(async () => Promise.reject('test 2'));
+const testFn3RejectWithError = jest.fn(async () => {
+  throw new Error('test 3');
+});
+const testFn4SuccessWithArgs = jest.fn(async (args?) => Promise.resolve(args));
+const testFn5SuccessWithArgs = jest.fn(
+  async (args?) =>
+    new Promise((resolve) => {
+      setTimeout(() => {
+        resolve(args);
+      }, 1000);
+    })
+);
+const testFn6SuccessWithArgs = jest.fn(async (args, args2) => args + args2);
+beforeEach(() => {
+  jest.clearAllMocks();
+});
 
-      expect(executor).toBeDefined();
-    });
-    it('should have a function called execute', () => {
-      const executor = new Executor([]);
-
-      expect(executor.execute).toBeDefined();
-    });
-    it('should call both functions', async () => {
-      const mockFN1 = jest.fn(() => Promise.resolve('test 1'));
-      const mockFN2 = jest.fn((args?: any) => Promise.resolve(args));
-
-      const executor = new Executor([
+describe('execute function', () => {
+  describe('default behavior', () => {
+    it('should return fulfilled', async () => {
+      const values = await execute([
         {
           args: {},
-          method: mockFN1,
+          method: testFn1Success,
           name: 'test1',
           options: {}
-        },
+        }
+      ]);
+      expect(testFn1Success).toHaveBeenCalled();
+      expect(values).toMatchObject({
+        test1: {
+          status: 'fulfilled',
+          value: 'test 1'
+        }
+      });
+    });
+    it('should return rejected', async () => {
+      const values = await execute([
         {
-          args: { arg1: 'test1' },
-          method: mockFN2,
+          args: {},
+          method: testFn2Reject,
           name: 'test2',
           options: {}
         }
       ]);
-
-      const results = await executor.execute();
-      expect(results).toMatchObject({
+      expect(testFn2Reject).toHaveBeenCalled();
+      expect(values).toMatchObject({
+        test2: {
+          status: 'rejected',
+          reason: 'test 2'
+        }
+      });
+    });
+    it('should return rejected with error', async () => {
+      const values = await execute([
+        {
+          args: {},
+          method: testFn3RejectWithError,
+          name: 'test3',
+          options: {}
+        }
+      ]);
+      expect(testFn3RejectWithError).toHaveBeenCalled();
+      expect(values).toMatchObject({
+        test3: {
+          status: 'rejected',
+          reason: Error('test 3')
+        }
+      });
+    });
+    it('should call multiple calls', async () => {
+      const values = await execute([
+        {
+          args: {},
+          method: testFn1Success,
+          name: 'test1',
+          options: {}
+        },
+        {
+          args: {},
+          method: testFn2Reject,
+          name: 'test2',
+          options: {}
+        }
+      ]);
+      expect(testFn1Success).toHaveBeenCalled();
+      expect(testFn2Reject).toHaveBeenCalled();
+      expect(values).toMatchObject({
         test1: {
           status: 'fulfilled',
           value: 'test 1'
         },
         test2: {
-          status: 'fulfilled',
-          value: {
-            arg1: 'test1'
-          }
+          status: 'rejected',
+          reason: 'test 2'
         }
       });
     });
-    it('should call all the functions provided', async () => {
-      const mockFN1 = jest.fn((arg) => Promise.resolve(arg));
-      const mockFN2 = jest.fn((args?: any) => Promise.resolve(args));
-
-      const executor = new Executor([
+    it('should succeed with args', async () => {
+      const values = await execute([
         {
-          args: ['test 1'],
-          method: mockFN1,
+          args: {},
+          method: testFn4SuccessWithArgs,
           name: 'test1',
-          options: {}
-        },
-        {
-          args: { arg1: 'test1' },
-          method: mockFN2,
-          name: 'test2',
           options: {}
         }
       ]);
-
-      const results = await executor.execute();
-      expect(results).toMatchObject({
+      expect(testFn4SuccessWithArgs).toHaveBeenCalled();
+      expect(values).toMatchObject({
         test1: {
           status: 'fulfilled',
-          value: 'test 1'
-        },
-        test2: {
-          status: 'fulfilled',
-          value: {
-            arg1: 'test1'
-          }
+          value: {}
         }
       });
     });
   });
 
-  describe('race conditions', () => {
-    it('should call methods as a race condition', async () => {
-      const mockFN1 = jest.fn(() => Promise.resolve('test 1'));
-      const mockFN2 = jest.fn(
-        () =>
-          new Promise((resolve) => {
-            setTimeout(() => resolve('test 2'), 1000);
-          })
-      );
-
-      const executor = new Executor([
-        {
-          args: [],
-          method: [mockFN1, mockFN2],
-          name: 'test1',
-          options: {
-            isRace: true
-          }
-        }
-      ]);
-      const results = await executor.execute();
-      expect(results).toMatchObject({
-        test1: {
-          status: 'fulfilled',
-          value: 'test 1'
-        }
-      });
-    });
-    it('should work when arg set is an obj', async () => {
-      const mockFN1 = jest.fn((args) => Promise.resolve(args));
-
-      const mockFN2 = jest.fn(() => Promise.resolve('test 2'));
-
-      const executor = new Executor([
-        {
-          args: [
-            {
-              arg1: 'test1'
-            }
-          ],
-          method: [mockFN1, mockFN2],
-          name: 'test1',
-          options: {
-            isRace: true
-          }
-        }
-      ]);
-
-      const results = await executor.execute();
-
-      expect(results).toMatchObject({
-        test1: {
-          status: 'fulfilled',
-          value: {
-            arg1: 'test1'
-          }
-        }
-      });
-    });
-    it('should work when arg set is a array', async () => {
-      const mockFN1 = jest.fn((args) => Promise.resolve(args));
-
-      const mockFN2 = jest.fn((str) => Promise.resolve(str));
-
-      const executor = new Executor([
-        {
-          args: [
-            ['args test'],
-            {
-              arg1: 'test1'
-            }
-          ],
-          method: [mockFN2, mockFN1],
-          name: 'test1',
-          options: {
-            isRace: true
-          }
-        }
-      ]);
-      const results = await executor.execute();
-
-      expect(results).toMatchObject({
-        test1: {
-          status: 'fulfilled',
-          value: 'args test'
-        }
-      });
-    });
-    it('should error, no race flag', async () => {
-      const mockFN1 = jest.fn(() => Promise.resolve('test 1'));
-      const mockFN2 = jest.fn((args?: any) => Promise.resolve(args));
-
-      const executor = new Executor([
-        {
-          args: {},
-          method: [mockFN1, mockFN2],
-          name: 'test1',
-          options: {}
-        }
-      ]);
-
-      expect(await executor.execute()).toMatchObject({
-        test1: {
-          status: 'rejected',
-          reason: Error(
-            'test1: is an array but not flagged as a race condition'
-          )
-        }
-      });
-    });
-    it('should error, not array w/ flag', async () => {
-      const mockFN1 = jest.fn(() => Promise.resolve('test1'));
-
-      const executor = new Executor([
-        {
-          args: {},
-          method: mockFN1,
-          name: 'test1',
-          options: {
-            isRace: true
-          }
-        }
-      ]);
-
-      expect(await executor.execute()).toMatchObject({
-        test1: {
-          status: 'rejected',
-          reason: Error(
-            'test1: methods must be in an array when in race condition'
-          )
-        }
-      });
-    });
-    it('should error, when array len 1 w/ flag', async () => {
-      const mockFN1 = jest.fn(() => Promise.resolve('test1'));
-
-      const executor = new Executor([
-        {
-          args: [],
-          method: [mockFN1],
-          name: 'test1',
-          options: {
-            isRace: true
-          }
-        }
-      ]);
-      const results = await executor.execute();
-
-      expect(results).toMatchObject({
-        test1: {
-          status: 'rejected',
-          reason: Error(
-            'test1: there must be two methods to fulfill race condition'
-          )
-        }
-      });
-    });
-    it('should error, when array and no flag', async () => {
-      const mockFN1 = jest.fn(() => Promise.resolve('test1'));
-
-      const executor = new Executor([
-        {
-          args: [],
-          method: [mockFN1],
-          name: 'test1',
-          options: {}
-        }
-      ]);
-
-      const results = await executor.execute();
-
-      expect(results).toMatchObject({
-        test1: {
-          status: 'rejected',
-          reason: Error(
-            'test1: is an array but not flagged as a race condition'
-          )
-        }
-      });
-    });
-  });
-
-  describe('error with logs', () => {
-    it('should error with logged values', async () => {
+  describe('logging', () => {
+    it('should fail and log using a custom logger', async () => {
       const customLoggerFn = jest.fn((message) => {
         console.log(message);
       });
-
-      const testFn = jest.fn(() => {
-        return 'test';
-      });
-
-      const executor = new Executor(
+      const values = await execute(
         [
           {
-            args: [],
-            method: testFn,
-            name: 'test',
+            args: [{ args: 'test set 1' }, { args: 'test set 2' }],
+            method: [testFn5SuccessWithArgs, testFn4SuccessWithArgs],
+            name: 'test4',
             options: {
-              isRace: true
+              isRace: false
             }
           }
         ],
-        customLoggerFn
+        {
+          customLogger: customLoggerFn
+        }
       );
-
-      const results = await executor.execute();
-      expect(results).toMatchObject({
-        test: {
+      expect(customLoggerFn).toHaveBeenCalled();
+      expect(values).toMatchObject({
+        test4: {
           status: 'rejected',
           reason: Error(
-            'test: methods must be in an array when in race condition'
+            'test4: is an array but not flagged as a race condition'
           )
         }
       });
+    });
+    it('should fail without logger and operate as normal', async () => {
+      const values = await execute([
+        {
+          args: {},
+          method: [testFn5SuccessWithArgs, testFn4SuccessWithArgs],
+          name: 'test4',
+          options: {
+            isRace: false
+          }
+        }
+      ]);
+      expect(values).toMatchObject({
+        test4: {
+          status: 'rejected',
+          reason: Error(
+            'test4: is an array but not flagged as a race condition'
+          )
+        }
+      });
+    });
+  });
 
-      expect(customLoggerFn).toHaveBeenCalledWith(
-        'test: methods must be in an array when in race condition'
-      );
+  describe('race condition behavior', () => {
+    it('should succeed with race condition calls with args', async () => {
+      const values = await execute([
+        {
+          args: [],
+          method: [testFn1Success, testFn2Reject],
+          name: 'test1',
+          options: {
+            isRace: true
+          }
+        }
+      ]);
+      expect(values).toMatchObject({
+        test1: {
+          status: 'fulfilled',
+          value: 'test 1'
+        }
+      });
+    });
+    it('should succeed when second fn fulfills first', async () => {
+      const values = await execute([
+        {
+          args: [],
+          method: [testFn5SuccessWithArgs, testFn4SuccessWithArgs],
+          name: 'test4',
+          options: {
+            isRace: true
+          }
+        }
+      ]);
+      expect(testFn5SuccessWithArgs).toHaveBeenCalled();
+      expect(testFn4SuccessWithArgs).toHaveBeenCalled();
+      expect(values).toMatchObject({
+        test4: {
+          status: 'fulfilled',
+          value: {}
+        }
+      });
+    });
+
+    it('should error when args are not in an array', async () => {
+      const values = await execute([
+        {
+          args: {},
+          method: [testFn5SuccessWithArgs, testFn4SuccessWithArgs],
+          name: 'test4',
+          options: {
+            isRace: true
+          }
+        }
+      ]);
+      expect(values).toMatchObject({
+        test4: {
+          status: 'rejected',
+          reason: Error('test4: args must be an array')
+        }
+      });
+    });
+
+    it('should error when methods is not an array', async () => {
+      const values = await execute([
+        {
+          args: [],
+          method: testFn5SuccessWithArgs,
+          name: 'test4',
+          options: {
+            isRace: true
+          }
+        }
+      ]);
+      expect(values).toMatchObject({
+        test4: {
+          status: 'rejected',
+          reason: Error(
+            'test4: methods must be in an array when in race condition'
+          )
+        }
+      });
+    });
+
+    it('should error when methods is not > 1', async () => {
+      const values = await execute([
+        {
+          args: [],
+          method: [testFn5SuccessWithArgs],
+          name: 'test4',
+          options: {
+            isRace: true
+          }
+        }
+      ]);
+      expect(values).toMatchObject({
+        test4: {
+          status: 'rejected',
+          reason: Error(
+            'test4: there must be at least two methods to fulfill race condition'
+          )
+        }
+      });
+    });
+
+    it('should error when not flagged as race', async () => {
+      const values = await execute([
+        {
+          args: [],
+          method: [testFn1Success, testFn1Success],
+          name: 'test1',
+          options: {}
+        }
+      ]);
+      expect(values).toMatchObject({
+        test1: {
+          status: 'rejected',
+          reason: Error(
+            'test1: is an array but not flagged as a race condition'
+          )
+        }
+      });
+    });
+
+    it('should succeed when args are arrays', async () => {
+      const values = await execute([
+        {
+          args: [[1, 2], [1]],
+          method: [testFn6SuccessWithArgs, testFn5SuccessWithArgs],
+          name: 'test1',
+          options: {
+            isRace: true
+          }
+        }
+      ]);
+      expect(values).toMatchObject({
+        test1: {
+          status: 'fulfilled',
+          value: 3
+        }
+      });
     });
   });
 });
