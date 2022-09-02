@@ -24,17 +24,13 @@ export interface MethodStruct<T> {
 }
 export interface OptionsInterface {
   /**
-   * how to handle multiple method executions
-   */
-  isRace?: boolean = false;
-  /**
    * custom logger for the method execution
    */
   customLogger?: (args?: any) => void;
 }
 type ToOutputType<
   T extends MethodStruct<string>[],
-  M extends PromiseSettledResult<any>[]
+  M extends PromiseSettledResult<keyof MethodStruct<string>['method']>[]
 > = {
   [K in T[number] as K['name']]: M;
 };

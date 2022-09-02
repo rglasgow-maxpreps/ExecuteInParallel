@@ -1,11 +1,13 @@
-import execute from '../modules/executor';
+import execute from '../executor';
 
 const testFn1Success = jest.fn(async () => 'test 1');
 const testFn2Reject = jest.fn(async () => Promise.reject('test 2'));
 const testFn3RejectWithError = jest.fn(async () => {
   throw new Error('test 3');
 });
-const testFn4SuccessWithArgs = jest.fn(async (args?) => Promise.resolve(args));
+const testFn4SuccessWithArgs = jest.fn(
+  async (args?): Promise<typeof args> => Promise.resolve(args)
+);
 const testFn5SuccessWithArgs = jest.fn(
   async (args?) =>
     new Promise((resolve) => {
@@ -117,6 +119,16 @@ describe('execute function', () => {
         }
       });
     });
+    it('should succeed with args as array and args2 as obj', async () => {
+      const values = await execute([
+        {
+          args: [1, 2],
+          method: testFn6SuccessWithArgs,
+          name: 'test1',
+          options: {}
+        }
+      ]);
+    });
   });
 
   describe('logging', () => {
@@ -139,7 +151,10 @@ describe('execute function', () => {
           customLogger: customLoggerFn
         }
       );
-      expect(customLoggerFn).toHaveBeenCalled();
+      expect(customLoggerFn).toHaveBeenCalledWith(
+        'test4: is an array but not flagged as a race condition'
+      );
+
       expect(values).toMatchObject({
         test4: {
           status: 'rejected',
@@ -175,18 +190,28 @@ describe('execute function', () => {
     it('should succeed with race condition calls with args', async () => {
       const values = await execute([
         {
-          args: [],
-          method: [testFn1Success, testFn2Reject],
+          args: [1, 2],
+          method: testFn6SuccessWithArgs,
           name: 'test1',
-          options: {
-            isRace: true
-          }
+          options: {}
+        },
+        {
+          args: {},
+          method: testFn4SuccessWithArgs,
+          name: 'test2',
+          options: {}
         }
       ]);
+      expect(testFn4SuccessWithArgs).toHaveBeenCalledWith({});
+      expect(testFn6SuccessWithArgs).toHaveBeenCalledWith(1, 2);
       expect(values).toMatchObject({
         test1: {
           status: 'fulfilled',
-          value: 'test 1'
+          value: 3
+        },
+        test2: {
+          status: 'fulfilled',
+          value: {}
         }
       });
     });
@@ -306,6 +331,44 @@ describe('execute function', () => {
         test1: {
           status: 'fulfilled',
           value: 3
+        }
+      });
+    });
+
+    it('should succeed when 3 or more functions are passed', async () => {
+      const values = await execute([
+        {
+          args: [],
+          method: [testFn1Success, testFn2Reject, testFn1Success],
+          name: 'test1',
+          options: {
+            isRace: true
+          }
+        }
+      ]);
+      expect(values).toMatchObject({
+        test1: {
+          status: 'fulfilled',
+          value: 'test 1'
+        }
+      });
+    });
+
+    it('should succeed when undefined passed as arg', async () => {
+      const values = await execute([
+        {
+          args: [{ test: 'value' }, undefined],
+          method: [testFn4SuccessWithArgs, testFn2Reject],
+          name: 'test1',
+          options: {
+            isRace: true
+          }
+        }
+      ]);
+      expect(values).toMatchObject({
+        test1: {
+          status: 'fulfilled',
+          value: { test: 'value' }
         }
       });
     });
